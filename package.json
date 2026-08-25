@@ -12,6 +12,7 @@
     "concurrently": "^9.1.2"
   },
   "dependencies": {
+    "next": "14.2.16",
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0"
