@@ -1,0 +1,23 @@
+{
+  "name": "ai-pdf-chatbot-server",
+  "version": "1.0.0",
+  "description": "Express backend for AI PDF Chatbot",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "node index.js",
+    "test:rag": "node tests/rag.test.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.18.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "pdfjs-dist": "3.11.174"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
