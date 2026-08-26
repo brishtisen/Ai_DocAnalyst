@@ -1,22 +1,23 @@
 {
-  "name": "ai-pdf-chatbot-root",
+  "name": "ai-doc-analyst",
   "version": "1.0.0",
-  "description": "Root workspace for AI PDF Chatbot",
+  "description": "AI Document Analyst",
   "scripts": {
-    "install:all": "npm install && npm install --prefix server && npm install --prefix frontend",
-    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix frontend\"",
-    "build:all": "npm run build --prefix frontend",
-    "start": "npm start --prefix server"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node index.js"
   },
   "dependencies": {
-    "next": "14.2.16",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
-    "remark-math": "^6.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.0",
+    "concurrently": "^9.1.2"
   }
 }
