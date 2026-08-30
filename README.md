@@ -1,105 +1,263 @@
-# DocAnalyst - AI PDF Document Analyst
+# 📄✨ DocAnalyst
 
-An advanced, production-quality Multi-Document Chatbot and AI Analyst. It parses, indexes, and searches multiple PDFs using a robust Hybrid RAG (Retrieval-Augmented Generation) pipeline featuring Semantic Dense Search, Keyword BM25 Sparse Search, Reciprocal Rank Fusion (RRF), and Gemini LLM Reranking.
+### Your AI-Powered Companion for Understanding PDFs
 
-Features a premium dark/light mode UI inspired by Claude and Linear, complete with an integrated PDF viewer and interactive page-exact citations that automatically navigate and highlight sources.
+DocAnalyst is an intelligent PDF chatbot that allows users to upload PDF documents and have natural conversations with their content.
+
+Instead of endlessly scrolling through hundreds of pages hunting for information like a digital archaeologist 🔎, simply upload your document and ask questions.
+
+🌐 **Live Demo:** https://ai-doc-analyst.vercel.app/
 
 ---
 
-## 🚀 Getting Started
+## ✨ Features
 
-### 1. Prerequisites
-- **Node.js**: v18.0.0 or higher (Tested on v24.18.0)
-- **NPM**: v9.0.0 or higher
-- **Gemini API Key**: A valid key from [Google AI Studio](https://aistudio.google.com/)
+- 📤 Upload PDF documents
+- 💬 Chat with your documents
+- 🧠 AI-powered question answering
+- 📚 Support for multiple uploaded documents
+- ☑️ Select specific documents for focused conversations
+- 🗂️ Persistent chat history
+- 🔍 Document citations for AI responses
+- 📖 Integrated PDF viewer
+- 🌓 Dark and Light mode
+- 🖱️ Drag and drop PDF uploads
+- 📊 Upload progress tracking
+- 🗑️ Delete conversations and documents
 
-### 2. Set Up Environment Variables
-Create a `.env` file in the root folder of the project. You can copy the template:
+---
+
+## 🖼️ How It Works
+
+```text
+        📄 Upload PDF
+              │
+              ▼
+      🔍 Extract Document Text
+              │
+              ▼
+       🧠 Process & Analyze
+              │
+              ▼
+        📚 Store Context
+              │
+              ▼
+       💬 Ask Questions
+              │
+              ▼
+      ✨ AI Generated Answer
+```
+
+---
+
+## 🚀 Live Demo
+
+Try DocAnalyst here:
+
+👉 https://ai-doc-analyst.vercel.app/
+
+Upload a PDF, select the document, and start asking questions about its contents.
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+
+- ⚛️ React
+- ⚡ Vite
+- 🎨 CSS
+- 🎯 Lucide React Icons
+
+### Backend
+
+- 🟢 Node.js
+- 🚂 Express.js
+- 🗄️ SQLite
+
+### Deployment
+
+- ▲ Vercel
+
+---
+
+## 📂 Project Structure
+
+```text
+ai-doc-analyst/
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── ChatArea.jsx
+│   │   │   └── PDFViewer.jsx
+│   │   │
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   │
+│   └── package.json
+│
+├── server/
+│   └── package.json
+│
+└── README.md
+```
+
+---
+
+## ⚙️ Installation
+
+### 1️⃣ Clone the Repository
+
 ```bash
-# In the project root (C:\Users\USER\.gemini\antigravity\scratch\ai-pdf-chatbot)
-copy .env.example .env
-```
-Open `.env` and fill in your Gemini API key:
-```env
-GEMINI_API_KEY=AIzaSy...
+git clone https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
 
-*Alternatively, run this PowerShell command to quickly append your key:*
-```powershell
-Add-Content -Path "C:\Users\USER\.gemini\antigravity\scratch\ai-pdf-chatbot\.env" -Value "GEMINI_API_KEY=your_actual_key"
-```
+### 2️⃣ Open the Project
 
-### 3. Run the Application
-Start both the Express server (port 5000) and the Vite React frontend (port 3000) concurrently with a single command:
 ```bash
+cd YOUR-REPOSITORY
+```
+
+---
+
+## 🖥️ Run the Frontend
+
+```bash
+cd frontend
+npm install
 npm run dev
 ```
-Open your browser and navigate to **`http://localhost:3000`**.
 
----
+The frontend will typically run on:
 
-## 🛠️ Project Architecture
-
-```
-ai-pdf-chatbot/
-  ├── package.json              # Root package to orchestrate concurrent dev environments
-  ├── .env                      # Local API keys (ignored by Git)
-  ├── .env.example              # Configuration template
-  ├── .gitignore                # Excludes node_modules, database files, and uploaded PDFs
-  ├── README.md                 # Project handbook
-  ├── server/
-  │    ├── package.json         # Backend dependencies (Express, Multer, @google/genai, pdfjs-dist)
-  │    ├── index.js             # Express entrypoint, routes, SSE streaming, file uploads
-  │    ├── database.db          # Native SQLite database (auto-created)
-  │    ├── services/
-  │    │    ├── db.js           # SQLite db client using native node:sqlite
-  │    │    ├── pdf.js          # local PDF parsing + Gemini File API OCR fallback and chunking
-  │    │    ├── vector.js       # Dense similarity calculations + custom BM25 + RRF Hybrid search
-  │    │    └── gemini.js       # Gemini API wrappers (embeddings, reranking, completions)
-  │    └── tests/
-  │         └── rag.test.js     # Programmatic RAG accuracy & parser test runner
-  └── frontend/
-       ├── package.json         # React client dependencies (vite, lucide-react)
-       ├── vite.config.js       # Dev server configurations & API routing proxies
-       ├── index.html           # Fonts and responsive headers
-       └── src/
-            ├── main.jsx        # App mounting entrypoint
-            ├── index.css       # Core design tokens, light/dark theme variables, transitions
-            ├── App.jsx         # App coordinator (SSE streams, uploads, states)
-            └── components/
-                 ├── Sidebar.jsx     # Document manager, upload drops, session selections
-                 ├── ChatArea.jsx    # Custom Markdown parser, citations, starter prompts
-                 └── PDFViewer.jsx   # Embedded PDF viewport side-by-side with page navigations
+```text
+http://localhost:5173
 ```
 
 ---
 
-## 🧬 How the Hybrid RAG Works
+## 🗄️ Run the Backend
 
-1. **Ingestion**:
-   - Standard text PDFs are parsed locally and for free using `pdfjs-dist`.
-   - If a page has very sparse text (scanned PDF/images), it automatically falls back to **Gemini File API**, utilizing Google's state-of-the-art vision models to extract structured markdown text and tables.
-   - Text is split into semantic paragraphs/sentences (~1000 characters, ~200 characters overlap) while keeping track of page numbers.
-   - Embeddings are generated using Gemini's `text-embedding-004` and stored in SQLite.
+Open another terminal and run:
 
-2. **Retrieval**:
-   - When you type a query, the conversation context is condensed into a standalone query.
-   - **Semantic Search**: Computes cosine similarity of the query embedding against the SQLite database vectors.
-   - **Keyword Search**: Runs a lightweight custom JavaScript **BM25 TF-IDF** algorithm on the active documents.
-   - **RRF Integration**: Combines dense semantic rankings and sparse keyword rankings using Reciprocal Rank Fusion.
-   - **Reranking**: Sends the top 15 RRF candidates to Gemini for an LLM-based reranking, selecting the top 5 most relevant chunks to prevent LLM noise.
-
-3. **Response & Citations**:
-   - The final answer is streamed to the user via Server-Sent Events (SSE).
-   - Citations are sent as metadata and rendered inside the chat bubble as clickable pills (`📄 Financial Report, p. 12`).
-   - Clicking a pill launches the integrated viewer, reloading the PDF at the specific page (`#page=12`).
-
----
-
-## 🧪 Integration Testing
-Verify the backend RAG pipeline by running the test runner against any PDF file:
 ```bash
-# syntax: npm run test:rag -- <path-to-pdf> "<query>"
-npm run test:rag -- server/uploads/sample.pdf "Calculate the total revenue reported in the table"
+cd server
+npm install
+npm start
 ```
-If no arguments are provided, it runs a quick SQLite and service configuration integrity check.
+
+---
+
+## 📤 How to Use DocAnalyst
+
+### Step 1: Upload a PDF
+
+Upload one or more PDF documents using the document upload panel.
+
+### Step 2: Wait for Processing
+
+Allow the uploaded document to finish processing.
+
+### Step 3: Select Documents
+
+Select the document or documents you want the AI to use.
+
+### Step 4: Create a Chat
+
+Create a new chat session.
+
+### Step 5: Ask Questions
+
+Ask questions such as:
+
+```text
+What is this document about?
+```
+
+```text
+Summarize the main points.
+```
+
+```text
+What are the important conclusions?
+```
+
+```text
+Explain this section in simple words.
+```
+
+And let the AI do the document-diving 📄🔎
+
+---
+
+## 🌟 Key Highlights
+
+### 💬 Conversational Document Analysis
+
+DocAnalyst transforms static PDF documents into interactive conversations.
+
+### 📚 Multi-Document Support
+
+Upload multiple documents and choose which documents should be included in the AI's context.
+
+### 🌓 Theme Support
+
+Switch between dark and light modes for a more comfortable reading experience.
+
+### 📖 Built-in PDF Viewer
+
+View documents directly inside the application while interacting with the AI.
+
+### 🗂️ Chat Management
+
+Create, switch between, and delete conversations easily.
+
+---
+
+## 🚧 Future Improvements
+
+Some features planned for future versions include:
+
+- 📄 Support for DOCX and TXT files
+- 🔐 User authentication
+- 📊 Advanced document analytics
+- 🔎 Improved document search
+- 📁 Document folders and organization
+- 📤 Chat export
+- 🧠 Improved AI responses
+- 🌐 Multi-language document support
+
+---
+
+## 🤝 Contributing
+
+Contributions, suggestions, and improvements are welcome!
+
+1. Fork the repository.
+2. Create a new branch.
+3. Make your changes.
+4. Submit a Pull Request.
+
+---
+
+## 📜 License
+
+This project is created for educational and learning purposes.
+
+---
+
+## 👩‍💻 Developer
+
+**Brishti Sen**
+
+Built with ☕, code, PDFs, and a suspicious amount of debugging.
+
+---
+
+## ⭐ Support
+
+If you like **DocAnalyst**, consider giving the repository a ⭐.
+
+It helps the little GitHub constellation shine a bit brighter. ✨
