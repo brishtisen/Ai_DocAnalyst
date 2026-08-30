@@ -8,6 +8,11 @@ const __dirname = path.dirname(__filename);
 
 // Load env variables
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config();
+
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004';
 
 let ai = null;
 
@@ -38,17 +43,17 @@ export const geminiService = {
       const batch = texts.slice(i, i + batchSize);
       try {
         const response = await client.models.embedContent({
-          model: 'gemini-embedding-001',
+          model: GEMINI_EMBEDDING_MODEL,
           contents: batch,
         });
 
         // The SDK returns response.embeddings which is an array of objects
         // Each object contains a 'values' property which is the actual float array
         if (response.embeddings) {
-          const vals = response.embeddings.map(e => e.values);
+          const vals = response.embeddings.map(e => e.values || e);
           embeddings.push(...vals);
         } else if (response.embedding) {
-          embeddings.push(response.embedding.values);
+          embeddings.push(response.embedding.values || response.embedding);
         }
       } catch (error) {
         console.error('Error generating embeddings batch:', error);
@@ -77,7 +82,7 @@ export const geminiService = {
 
       console.log(`File uploaded successfully: ${fileUpload.name}. Starting content extraction...`);
 
-      // 2. Query Gemini 2.0 Flash to extract text page-by-page in JSON
+      // 2. Query Gemini Flash to extract text page-by-page in JSON
       const prompt = `
         You are a high-fidelity document parsing engine. Read this PDF document.
         Extract the text and tabular content of this PDF page by page.
@@ -94,7 +99,7 @@ export const geminiService = {
       `;
 
       const response = await client.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: GEMINI_MODEL,
         contents: [
           fileUpload,
           prompt
@@ -173,7 +178,7 @@ export const geminiService = {
 
     try {
       const response = await client.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: GEMINI_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -234,7 +239,7 @@ export const geminiService = {
 
     try {
       const responseStream = await client.models.generateContentStream({
-        model: 'gemini-3.6-flash',
+        model: GEMINI_MODEL,
         contents: contents,
         config: {
           systemInstruction: systemInstruction,

@@ -6,7 +6,8 @@ export default function PDFViewer({
   pdfPageNum,
   onClose,
   isCollapsed,
-  onToggleCollapse
+  onToggleCollapse,
+  apiUrl = ''
 }) {
   if (isCollapsed) {
     return (
@@ -23,7 +24,7 @@ export default function PDFViewer({
   // Construct source URL with page hash
   // e.g. /api/documents/123/view#page=3
   const pdfUrl = viewingDoc 
-    ? `/api/documents/${viewingDoc.id}/view#page=${pdfPageNum || 1}` 
+    ? `${apiUrl}/api/documents/${viewingDoc.id}/view#page=${pdfPageNum || 1}` 
     : null;
 
   return (
@@ -49,7 +50,7 @@ export default function PDFViewer({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {viewingDoc && (
             <a 
-              href={`/api/documents/${viewingDoc.id}/view`} 
+              href={`${apiUrl}/api/documents/${viewingDoc.id}/view`} 
               download={viewingDoc.name}
               className="pdf-close-btn"
               title="Download PDF"

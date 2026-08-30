@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "AI Document Analyst",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "start": "node index.js"
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix frontend\"",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:server": "npm run dev --prefix server",
+    "build": "npm run build --prefix frontend",
+    "start": "npm start --prefix server",
+    "test:rag": "npm run test:rag --prefix server"
   },
   "dependencies": {
     "react": "^18.3.1",

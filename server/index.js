@@ -15,6 +15,10 @@ const __dirname = path.dirname(__filename);
 
 // Load env variables
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config();
+
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -76,7 +80,7 @@ async function reformulateQuery(chatHistory, currentQuestion) {
   try {
     const ai = getGeminiClient();
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: GEMINI_MODEL,
       contents: prompt,
     });
     const rewritten = response.text.trim();

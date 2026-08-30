@@ -3,9 +3,9 @@ import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import PDFViewer from './components/PDFViewer';
 
-// Reads from Vercel's environment variable (VITE_API_URL) at build time.
-// Falls back to localhost for local development if it's not set.
-const API_URL = 'https://ai-doc-aanalyst.vercel.app';
+// Reads from environment variable (VITE_API_URL) at build time,
+// or defaults to empty string for relative API proxying in development/production.
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export default function App() {
   // Theme state
@@ -393,6 +393,7 @@ export default function App() {
           onClose={() => setIsViewerCollapsed(true)}
           isCollapsed={isViewerCollapsed}
           onToggleCollapse={() => setIsViewerCollapsed(prev => !prev)}
+          apiUrl={API_URL}
         />
       </div>
     </div>
