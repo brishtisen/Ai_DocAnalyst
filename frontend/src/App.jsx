@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import PDFViewer from './components/PDFViewer';
 
+// Reads from Vercel's environment variable (VITE_API_URL) at build time.
+// Falls back to localhost for local development if it's not set.
 const API_URL = 'https://ai-doc-aanalyst.vercel.app';
 
 export default function App() {
