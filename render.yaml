@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: ai-doc-analyst-backend
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false   # set the real value in Render's dashboard, not here
+    # Render assigns PORT automatically; server/index.js already reads
+    # process.env.PORT, so no extra config is needed for that.
+
+    # NOTE: server/database.db and server/uploads are written to local disk.
+    # Render's free plan has an EPHEMERAL filesystem — data can be wiped on
+    # redeploy or restart. For anything you need to keep long-term, either:
+    #   1) attach a Render Persistent Disk (paid, mounted at e.g. /data), or
+    #   2) move to a hosted DB (e.g. Turso/Postgres) + cloud storage (e.g. S3).
+    # disk:
+    #   name: data
+    #   mountPath: /opt/render/project/src/server
+    #   sizeGB: 1
