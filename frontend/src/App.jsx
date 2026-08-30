@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import PDFViewer from './components/PDFViewer';
 
+const API_URL = 'https://ai-doc-aanalyst.vercel.app';
+
 export default function App() {
   // Theme state
   const [theme, setTheme] = useState(() => {
@@ -47,7 +49,7 @@ export default function App() {
 
   const loadDocuments = useCallback(async () => {
     try {
-      const res = await fetch('/api/documents');
+      const res = await fetch(`${API_URL}/api/documents`);
       if (res.ok) {
         const data = await res.json();
         setDocuments(data);
@@ -59,7 +61,7 @@ export default function App() {
 
   const loadConversations = useCallback(async () => {
     try {
-      const res = await fetch('/api/conversations');
+      const res = await fetch(`${API_URL}/api/conversations`);
       if (res.ok) {
         const data = await res.json();
         setConversations(data);
@@ -76,7 +78,7 @@ export default function App() {
   const loadMessages = useCallback(async (sessionId) => {
     if (!sessionId) return;
     try {
-      const res = await fetch(`/api/conversations/${sessionId}/messages`);
+      const res = await fetch(`${API_URL}/api/conversations/${sessionId}/messages`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
@@ -134,7 +136,7 @@ export default function App() {
   // Chat session creation
   const handleCreateSession = async () => {
     try {
-      const res = await fetch('/api/conversations', {
+      const res = await fetch(`${API_URL}/api/conversations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: `Chat ${new Date().toLocaleDateString()}` })
@@ -152,7 +154,7 @@ export default function App() {
   // Chat session deletion
   const handleDeleteSession = async (id) => {
     try {
-      const res = await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/api/conversations/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setConversations(prev => prev.filter(s => s.id !== id));
         if (activeSessionId === id) {
@@ -175,7 +177,7 @@ export default function App() {
   const handleDeleteDoc = async (id) => {
     if (!window.confirm('Are you sure you want to delete this document? All associated vectors will be erased.')) return;
     try {
-      const res = await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/api/documents/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setDocuments(prev => prev.filter(d => d.id !== id));
         if (viewingDoc && viewingDoc.id === id) {
@@ -205,7 +207,7 @@ export default function App() {
         const formData = new FormData();
         formData.append('pdf', file);
 
-        xhr.open('POST', '/api/documents', true);
+        xhr.open('POST', `${API_URL}/api/documents`, true);
 
         // Upload progress listener
         xhr.upload.addEventListener('progress', (e) => {
@@ -219,7 +221,12 @@ export default function App() {
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
-            const errResponse = JSON.parse(xhr.responseText || '{}');
+            let errResponse = {};
+            try {
+              errResponse = JSON.parse(xhr.responseText || '{}');
+            } catch {
+              errResponse = {};
+            }
             reject(new Error(errResponse.error || 'Upload failed'));
           }
         };
@@ -247,7 +254,7 @@ export default function App() {
   const handleCitationClick = (docId, docName, pageNumber) => {
     setViewingDoc({ id: docId, name: docName });
     setPdfPageNum(pageNumber);
-    setIsViewerCollapsed(false); // Make sure viewer is open
+    setIsViewerCollapsed(false);
   };
 
   // Sending chat query messages & handling the Server-Sent Events (SSE) stream
@@ -270,7 +277,7 @@ export default function App() {
     setStreamingCitations([]);
 
     try {
-      const response = await fetch(`/api/conversations/${activeSessionId}/messages`, {
+      const response = await fetch(`${API_URL}/api/conversations/${activeSessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
