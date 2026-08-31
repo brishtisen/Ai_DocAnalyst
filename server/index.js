@@ -332,7 +332,7 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
       },
       (error) => {
         console.error('Error during streaming:', error);
-        res.write(`data: ${JSON.stringify({ error: 'An error occurred while generating response. Please try again.' })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: error.message || 'An error occurred while generating response.' })}\n\n`);
         res.end();
       }
     );

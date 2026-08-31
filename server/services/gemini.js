@@ -251,12 +251,33 @@ export const geminiService = {
       5. Keep the conversation context in mind for follow-up questions, but always prioritize the document context to formulate answers.
     `;
 
-    // Map conversation history into Gemini format
-    // Gemini expects: [{ role: 'user'|'model', parts: [{ text: '...' }] }]
-    const contents = chatHistory.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }]
-    }));
+    // Map conversation history into Gemini format, merging consecutive same-role turns
+    // to strictly respect the alternating user/model API contract
+    const contents = [];
+    for (const msg of chatHistory) {
+      if (!msg.content || !msg.content.trim()) continue;
+      const role = msg.role === 'user' ? 'user' : 'model';
+      if (contents.length > 0 && contents[contents.length - 1].role === role) {
+        contents[contents.length - 1].parts[0].text += '\n\n' + msg.content.trim();
+      } else {
+        contents.push({
+          role: role,
+          parts: [{ text: msg.content.trim() }]
+        });
+      }
+    }
+
+    // Ensure the chat starts with user role
+    while (contents.length > 0 && contents[0].role !== 'user') {
+      contents.shift();
+    }
+
+    if (contents.length === 0) {
+      contents.push({
+        role: 'user',
+        parts: [{ text: 'Please summarize the document.' }]
+      });
+    }
 
     const candidateModels = [GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter((v, i, a) => a.indexOf(v) === i);
 
