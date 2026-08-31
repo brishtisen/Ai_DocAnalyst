@@ -4,8 +4,8 @@ import ChatArea from './components/ChatArea';
 import PDFViewer from './components/PDFViewer';
 
 // Reads from environment variable (VITE_API_URL) at build time,
-// or defaults to empty string for relative API proxying in development/production.
-const API_URL = import.meta.env.VITE_API_URL || '';
+// with automatic fallback to your live Render backend for production, and relative proxy for dev.
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'https://ai-docanalyst.onrender.com');
 
 export default function App() {
   // Theme state
