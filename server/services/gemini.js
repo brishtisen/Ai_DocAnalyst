@@ -12,7 +12,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config();
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004';
+const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
 
 let ai = null;
 
@@ -32,32 +32,50 @@ export function getGeminiClient() {
 export const geminiService = {
   /**
    * Generates embeddings for an array of texts.
-   * Splits into batches if necessary to avoid API limits.
+   * Uses multi-model fallback (gemini-embedding-001, text-embedding-004, embedding-001).
    */
   getEmbeddings: async (texts) => {
     const client = getGeminiClient();
     const batchSize = 100;
     const embeddings = [];
+    const candidateModels = [
+      GEMINI_EMBEDDING_MODEL,
+      'gemini-embedding-001',
+      'text-embedding-004',
+      'embedding-001'
+    ].filter((v, i, a) => a.indexOf(v) === i);
 
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
-      try {
-        const response = await client.models.embedContent({
-          model: GEMINI_EMBEDDING_MODEL,
-          contents: batch,
-        });
+      let lastError = null;
+      let batchSuccess = false;
 
-        // The SDK returns response.embeddings which is an array of objects
-        // Each object contains a 'values' property which is the actual float array
-        if (response.embeddings) {
-          const vals = response.embeddings.map(e => e.values || e);
-          embeddings.push(...vals);
-        } else if (response.embedding) {
-          embeddings.push(response.embedding.values || response.embedding);
+      for (const modelName of candidateModels) {
+        try {
+          const response = await client.models.embedContent({
+            model: modelName,
+            contents: batch,
+          });
+
+          if (response.embeddings) {
+            const vals = response.embeddings.map(e => e.values || e);
+            embeddings.push(...vals);
+            batchSuccess = true;
+            break;
+          } else if (response.embedding) {
+            embeddings.push(response.embedding.values || response.embedding);
+            batchSuccess = true;
+            break;
+          }
+        } catch (err) {
+          lastError = err;
+          console.warn(`Embedding attempt with ${modelName} failed, trying next candidate:`, err.message);
         }
-      } catch (error) {
-        console.error('Error generating embeddings batch:', error);
-        throw error;
+      }
+
+      if (!batchSuccess) {
+        console.error('All embedding candidate models failed.');
+        throw lastError || new Error('Failed to generate embeddings with all candidate models.');
       }
     }
 
