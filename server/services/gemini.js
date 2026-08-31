@@ -29,21 +29,100 @@ export function getGeminiClient() {
   return ai;
 }
 
+let cachedGenerateModels = null;
+let cachedEmbeddingModels = null;
+
+export async function getAvailableGenerateModels(client) {
+  if (cachedGenerateModels && cachedGenerateModels.length > 0) {
+    return cachedGenerateModels;
+  }
+
+  const defaults = [
+    process.env.GEMINI_MODEL,
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-2.5-pro'
+  ].filter(Boolean);
+
+  try {
+    const list = await client.models.list();
+    const discovered = [];
+    for await (const m of list) {
+      if (m.name) {
+        const id = m.name.replace(/^models\//, '');
+        if (!id.includes('embedding')) {
+          discovered.push(id);
+        }
+      }
+    }
+    console.log('Live available generate models for API key:', discovered);
+    if (discovered.length > 0) {
+      // Prioritize flash models
+      discovered.sort((a, b) => {
+        if (a.includes('2.5-flash')) return -1;
+        if (b.includes('2.5-flash')) return 1;
+        if (a.includes('flash') && !b.includes('flash')) return -1;
+        if (!a.includes('flash') && b.includes('flash')) return 1;
+        return 0;
+      });
+      cachedGenerateModels = discovered;
+      return discovered;
+    }
+  } catch (err) {
+    console.warn('Failed to query models list from API:', err.message);
+  }
+
+  cachedGenerateModels = defaults;
+  return defaults;
+}
+
+async function getAvailableEmbeddingModels(client) {
+  if (cachedEmbeddingModels && cachedEmbeddingModels.length > 0) {
+    return cachedEmbeddingModels;
+  }
+
+  const defaults = [
+    process.env.GEMINI_EMBEDDING_MODEL,
+    'gemini-embedding-001',
+    'text-embedding-004',
+    'embedding-001'
+  ].filter(Boolean);
+
+  try {
+    const list = await client.models.list();
+    const discovered = [];
+    for await (const m of list) {
+      if (m.name) {
+        const id = m.name.replace(/^models\//, '');
+        if (id.includes('embedding')) {
+          discovered.push(id);
+        }
+      }
+    }
+    console.log('Live available embedding models for API key:', discovered);
+    if (discovered.length > 0) {
+      cachedEmbeddingModels = discovered;
+      return discovered;
+    }
+  } catch (err) {
+    console.warn('Failed to query embedding models list from API:', err.message);
+  }
+
+  cachedEmbeddingModels = defaults;
+  return defaults;
+}
+
 export const geminiService = {
   /**
    * Generates embeddings for an array of texts.
-   * Uses multi-model fallback (gemini-embedding-001, text-embedding-004, embedding-001).
+   * Uses multi-model fallback.
    */
   getEmbeddings: async (texts) => {
     const client = getGeminiClient();
+    const candidateModels = await getAvailableEmbeddingModels(client);
     const batchSize = 100;
     const embeddings = [];
-    const candidateModels = [
-      GEMINI_EMBEDDING_MODEL,
-      'gemini-embedding-001',
-      'text-embedding-004',
-      'embedding-001'
-    ].filter((v, i, a) => a.indexOf(v) === i);
 
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
@@ -88,6 +167,7 @@ export const geminiService = {
    */
   parsePDFMultimodal: async (filePath) => {
     const client = getGeminiClient();
+    const candidateModels = await getAvailableGenerateModels(client);
     console.log(`Uploading ${filePath} to Gemini File API for OCR/Multimodal parsing...`);
 
     let fileUpload;
@@ -116,18 +196,33 @@ export const geminiService = {
         ]
       `;
 
-      const response = await client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [
-          fileUpload,
-          prompt
-        ],
-        config: {
-          responseMimeType: 'application/json',
-        }
-      });
+      let responseText = null;
+      let lastErr = null;
 
-      const responseText = response.text;
+      for (const model of candidateModels) {
+        try {
+          const response = await client.models.generateContent({
+            model,
+            contents: [
+              fileUpload,
+              prompt
+            ],
+            config: {
+              responseMimeType: 'application/json',
+            }
+          });
+          responseText = response.text;
+          if (responseText) break;
+        } catch (err) {
+          lastErr = err;
+          console.warn(`OCR attempt with model ${model} failed:`, err.message);
+        }
+      }
+
+      if (!responseText) {
+        throw lastErr || new Error('Failed to extract OCR content with available models.');
+      }
+
       try {
         const pages = JSON.parse(responseText);
         return pages; // [{ page: 1, text: '...' }, ...]
@@ -168,6 +263,7 @@ export const geminiService = {
     }
 
     const client = getGeminiClient();
+    const candidateModels = await getAvailableGenerateModels(client);
     
     // Format chunks for prompt
     const formattedChunks = chunks.map((c, i) => `[Chunk ${i}] (Doc: ${c.document_name}, Page: ${c.page_number})\n${c.content}\n---`).join('\n');
@@ -193,8 +289,6 @@ export const geminiService = {
         {"index": 1, "relevance_score": 3}
       ]
     `;
-
-    const candidateModels = [GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter((v, i, a) => a.indexOf(v) === i);
 
     for (const model of candidateModels) {
       try {
@@ -226,6 +320,7 @@ export const geminiService = {
    */
   streamChatResponse: async (chatHistory, contextChunks, onChunk, onDone, onError) => {
     const client = getGeminiClient();
+    const candidateModels = await getAvailableGenerateModels(client);
 
     // Prepare context block
     const contextText = contextChunks
@@ -278,8 +373,6 @@ export const geminiService = {
         parts: [{ text: 'Please summarize the document.' }]
       });
     }
-
-    const candidateModels = [GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter((v, i, a) => a.indexOf(v) === i);
 
     for (const model of candidateModels) {
       try {

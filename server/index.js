@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { dbOperations } from './services/db.js';
 import { pdfService, chunkDocumentPages } from './services/pdf.js';
-import { geminiService, getGeminiClient } from './services/gemini.js';
+import { geminiService, getGeminiClient, getAvailableGenerateModels } from './services/gemini.js';
 import { vectorService } from './services/vector.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -77,8 +77,8 @@ async function reformulateQuery(chatHistory, currentQuestion) {
     Standalone Search Query:
   `;
 
-  const candidateModels = [GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter((v, i, a) => a.indexOf(v) === i);
   const ai = getGeminiClient();
+  const candidateModels = await getAvailableGenerateModels(ai);
 
   for (const model of candidateModels) {
     try {
