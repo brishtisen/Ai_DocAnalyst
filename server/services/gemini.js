@@ -194,28 +194,31 @@ export const geminiService = {
       ]
     `;
 
-    try {
-      const response = await client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-        }
-      });
+    const candidateModels = [GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter((v, i, a) => a.indexOf(v) === i);
 
-      const rankings = JSON.parse(response.text);
-      // Filter out low scores (e.g. relevance < 2) and return topK indices
-      const sortedIndices = rankings
-        .filter(r => r.relevance_score >= 2)
-        .map(r => r.index)
-        .slice(0, topK);
+    for (const model of candidateModels) {
+      try {
+        const response = await client.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+          }
+        });
 
-      return sortedIndices;
-    } catch (error) {
-      console.error('Error in Gemini reranking, falling back to original vector scores:', error);
-      // Return first topK items as fallback
-      return Array.from({ length: Math.min(chunks.length, topK) }, (_, i) => i);
+        const rankings = JSON.parse(response.text);
+        const sortedIndices = rankings
+          .filter(r => r.relevance_score >= 2)
+          .map(r => r.index)
+          .slice(0, topK);
+
+        return sortedIndices.length > 0 ? sortedIndices : Array.from({ length: Math.min(chunks.length, topK) }, (_, i) => i);
+      } catch (error) {
+        console.warn(`Error in Gemini reranking with ${model}:`, error.message);
+      }
     }
+
+    return Array.from({ length: Math.min(chunks.length, topK) }, (_, i) => i);
   },
 
   /**
@@ -255,27 +258,35 @@ export const geminiService = {
       parts: [{ text: msg.content }]
     }));
 
-    try {
-      const responseStream = await client.models.generateContentStream({
-        model: GEMINI_MODEL,
-        contents: contents,
-        config: {
-          systemInstruction: systemInstruction,
-          temperature: 0.1, // Low temperature for factual accuracy
-        }
-      });
+    const candidateModels = [GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter((v, i, a) => a.indexOf(v) === i);
 
-      let completeText = '';
-      for await (const chunk of responseStream) {
-        const text = chunk.text || '';
-        completeText += text;
-        onChunk(text);
+    for (const model of candidateModels) {
+      try {
+        console.log(`Attempting streamChatResponse with model: ${model}...`);
+        const responseStream = await client.models.generateContentStream({
+          model,
+          contents,
+          config: {
+            systemInstruction,
+            temperature: 0.1, // Low temperature for factual accuracy
+          }
+        });
+
+        let completeText = '';
+        for await (const chunk of responseStream) {
+          const text = chunk.text || '';
+          completeText += text;
+          onChunk(text);
+        }
+        
+        onDone(completeText);
+        return; // Successfully completed
+      } catch (error) {
+        console.error(`Error streaming Gemini response with ${model}:`, error);
+        if (model === candidateModels[candidateModels.length - 1]) {
+          onError(error);
+        }
       }
-      
-      onDone(completeText);
-    } catch (error) {
-      console.error('Error streaming Gemini response:', error);
-      onError(error);
     }
   }
 };

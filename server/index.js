@@ -77,19 +77,26 @@ async function reformulateQuery(chatHistory, currentQuestion) {
     Standalone Search Query:
   `;
 
-  try {
-    const ai = getGeminiClient();
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: prompt,
-    });
-    const rewritten = response.text.trim();
-    console.log(`Reformulated query from: "${currentQuestion}" to: "${rewritten}"`);
-    return rewritten;
-  } catch (error) {
-    console.warn('Failed to reformulate query, using original question:', error);
-    return currentQuestion;
+  const candidateModels = [GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter((v, i, a) => a.indexOf(v) === i);
+  const ai = getGeminiClient();
+
+  for (const model of candidateModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+      });
+      const rewritten = response.text?.trim();
+      if (rewritten) {
+        console.log(`Reformulated query from: "${currentQuestion}" to: "${rewritten}"`);
+        return rewritten;
+      }
+    } catch (error) {
+      console.warn(`Failed to reformulate query with ${model}:`, error.message);
+    }
   }
+
+  return currentQuestion;
 }
 
 /* ==========================================================================
