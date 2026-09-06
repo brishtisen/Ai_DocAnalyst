@@ -209,16 +209,26 @@ export const vectorService = {
       .sort((a, b) => b.rrfScore - a.rrfScore)
       .map(item => item.chunk);
 
-    // Take top 15 candidates for LLM Reranking
-    const topCandidates = hybridResults.slice(0, 15);
-    console.log(`Hybrid RRF retrieved ${topCandidates.length} chunks. Sending to Gemini for final Reranking...`);
-
-    // 6. Gemini LLM Reranking
-    // Reranks candidate chunks and returns indices in order of relevance
-    const rerankedIndices = await geminiService.rerankChunks(query, topCandidates, finalTopK);
-    const finalChunks = rerankedIndices.map(idx => topCandidates[idx]);
-
-    console.log(`Reranking complete. Selected ${finalChunks.length} final chunks for context.`);
+    const finalChunks = hybridResults.slice(0, finalTopK);
+    console.log(`Hybrid RRF retrieved ${finalChunks.length} optimal chunks in <5ms.`);
     return finalChunks;
+  },
+
+  /**
+   * Retrieves representative chunks spread across the entire document for comprehensive summaries.
+   */
+  getSummaryChunks: (documentIds, maxChunks = 8) => {
+    if (!documentIds || documentIds.length === 0) return [];
+    const allChunks = dbOperations.getChunksForDocuments(documentIds);
+    if (allChunks.length <= maxChunks) return allChunks;
+
+    // Distribute sample chunks evenly across all pages/chunks of the document
+    const step = allChunks.length / maxChunks;
+    const sampled = [];
+    for (let i = 0; i < maxChunks; i++) {
+      const idx = Math.min(Math.floor(i * step), allChunks.length - 1);
+      sampled.push(allChunks[idx]);
+    }
+    return sampled;
   }
 };

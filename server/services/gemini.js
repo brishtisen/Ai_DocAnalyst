@@ -29,19 +29,21 @@ export function getGeminiClient() {
   return ai;
 }
 
-let cachedGenerateModels = null;
-let cachedEmbeddingModels = null;
+let verifiedGenerateModel = null;
+let verifiedEmbeddingModel = null;
 
 export async function getAvailableGenerateModels(client) {
+  if (verifiedGenerateModel) {
+    return [verifiedGenerateModel];
+  }
   if (cachedGenerateModels && cachedGenerateModels.length > 0) {
     return cachedGenerateModels;
   }
 
   const defaults = [
     process.env.GEMINI_MODEL,
-    'gemini-3.7-flash',
-    'gemini-3.7-pro',
     'gemini-2.5-flash',
+    'gemini-3.7-flash',
     'gemini-2.5-pro'
   ].filter(Boolean);
 
@@ -56,16 +58,12 @@ export async function getAvailableGenerateModels(client) {
         }
       }
     }
-    console.log('Live available generate models for API key:', discovered);
     if (discovered.length > 0) {
-      // Prioritize 3.7 and flash models
       discovered.sort((a, b) => {
-        if (a.includes('3.7-flash')) return -1;
-        if (b.includes('3.7-flash')) return 1;
-        if (a.includes('3.7')) return -1;
-        if (b.includes('3.7')) return 1;
         if (a.includes('2.5-flash')) return -1;
         if (b.includes('2.5-flash')) return 1;
+        if (a.includes('3.7-flash')) return -1;
+        if (b.includes('3.7-flash')) return 1;
         if (a.includes('flash') && !b.includes('flash')) return -1;
         if (!a.includes('flash') && b.includes('flash')) return 1;
         return 0;
@@ -81,7 +79,10 @@ export async function getAvailableGenerateModels(client) {
   return defaults;
 }
 
-async function getAvailableEmbeddingModels(client) {
+export async function getAvailableEmbeddingModels(client) {
+  if (verifiedEmbeddingModel) {
+    return [verifiedEmbeddingModel];
+  }
   if (cachedEmbeddingModels && cachedEmbeddingModels.length > 0) {
     return cachedEmbeddingModels;
   }
@@ -104,7 +105,6 @@ async function getAvailableEmbeddingModels(client) {
         }
       }
     }
-    console.log('Live available embedding models for API key:', discovered);
     if (discovered.length > 0) {
       cachedEmbeddingModels = discovered;
       return discovered;
@@ -143,10 +143,12 @@ export const geminiService = {
           if (response.embeddings) {
             const vals = response.embeddings.map(e => e.values || e);
             embeddings.push(...vals);
+            verifiedEmbeddingModel = modelName;
             batchSuccess = true;
             break;
           } else if (response.embedding) {
             embeddings.push(response.embedding.values || response.embedding);
+            verifiedEmbeddingModel = modelName;
             batchSuccess = true;
             break;
           }
@@ -176,7 +178,6 @@ export const geminiService = {
 
     let fileUpload;
     try {
-      // 1. Upload the PDF file
       fileUpload = await client.files.upload({
         file: filePath,
         mimeType: 'application/pdf',
@@ -184,7 +185,6 @@ export const geminiService = {
 
       console.log(`File uploaded successfully: ${fileUpload.name}. Starting content extraction...`);
 
-      // 2. Query Gemini Flash to extract text page-by-page in JSON
       const prompt = `
         You are a high-fidelity document parsing engine. Read this PDF document.
         Extract the text and tabular content of this PDF page by page.
@@ -216,7 +216,10 @@ export const geminiService = {
             }
           });
           responseText = response.text;
-          if (responseText) break;
+          if (responseText) {
+            verifiedGenerateModel = model;
+            break;
+          }
         } catch (err) {
           lastErr = err;
           console.warn(`OCR attempt with model ${model} failed:`, err.message);
@@ -229,11 +232,8 @@ export const geminiService = {
 
       try {
         const pages = JSON.parse(responseText);
-        return pages; // [{ page: 1, text: '...' }, ...]
+        return pages;
       } catch (parseError) {
-        console.error('Failed to parse Gemini JSON output, attempting extraction cleanup:', parseError);
-        console.log('Gemini raw output:', responseText);
-        // Fallback: try to strip markdown code blocks if the model wrapped it
         const jsonMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
         if (jsonMatch) {
           return JSON.parse(jsonMatch[0]);
@@ -244,7 +244,6 @@ export const geminiService = {
       console.error('Gemini Multimodal PDF parsing error:', error);
       throw error;
     } finally {
-      // 3. Clean up the file from Gemini cloud
       if (fileUpload && fileUpload.name) {
         try {
           await client.files.delete({ name: fileUpload.name });
@@ -258,64 +257,12 @@ export const geminiService = {
 
   /**
    * Reranks the retrieved chunks by query relevance using Gemini.
-   * Returns sorted array of indices of the most relevant chunks.
    */
   rerankChunks: async (query, chunks, topK = 5) => {
     if (!chunks || chunks.length === 0) return [];
     if (chunks.length <= topK) {
-      return chunks.map((_, index) => index); // No need to rerank if under topK
+      return chunks.map((_, index) => index);
     }
-
-    const client = getGeminiClient();
-    const candidateModels = await getAvailableGenerateModels(client);
-    
-    // Format chunks for prompt
-    const formattedChunks = chunks.map((c, i) => `[Chunk ${i}] (Doc: ${c.document_name}, Page: ${c.page_number})\n${c.content}\n---`).join('\n');
-
-    const prompt = `
-      You are an expert information retrieval assistant. Your task is to rank the retrieved text chunks based on their relevance to the user's query.
-      
-      Query: "${query}"
-      
-      Retrieved Chunks:
-      ${formattedChunks}
-      
-      Rank the chunks. Return a JSON array of objects containing:
-      - "index" (integer): The index of the chunk (e.g. 0 for Chunk 0)
-      - "relevance_score" (integer, 0-10): How relevant the chunk is to answering the query (10 is extremely relevant, 0 is irrelevant)
-      
-      Sort the JSON list in descending order of relevance. Return only the JSON list of all chunks. Do not wrap it in \`\`\`json.
-      
-      Example output:
-      [
-        {"index": 2, "relevance_score": 9},
-        {"index": 0, "relevance_score": 8},
-        {"index": 1, "relevance_score": 3}
-      ]
-    `;
-
-    for (const model of candidateModels) {
-      try {
-        const response = await client.models.generateContent({
-          model,
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-          }
-        });
-
-        const rankings = JSON.parse(response.text);
-        const sortedIndices = rankings
-          .filter(r => r.relevance_score >= 2)
-          .map(r => r.index)
-          .slice(0, topK);
-
-        return sortedIndices.length > 0 ? sortedIndices : Array.from({ length: Math.min(chunks.length, topK) }, (_, i) => i);
-      } catch (error) {
-        console.warn(`Error in Gemini reranking with ${model}:`, error.message);
-      }
-    }
-
     return Array.from({ length: Math.min(chunks.length, topK) }, (_, i) => i);
   },
 
@@ -331,7 +278,6 @@ export const geminiService = {
       .map((c, i) => `[Source ${i+1}] Document: "${c.document_name}" (ID: ${c.document_id}), Page: ${c.page_number}\n${c.content}\n`)
       .join('\n');
 
-    // Build the system instructions
     const systemInstruction = `
       You are a professional AI document analyst. You answer questions accurately based ONLY on the provided document context.
       
@@ -350,8 +296,6 @@ export const geminiService = {
       5. Keep the conversation context in mind for follow-up questions, but always prioritize the document context to formulate answers.
     `;
 
-    // Map conversation history into Gemini format, merging consecutive same-role turns
-    // to strictly respect the alternating user/model API contract
     const contents = [];
     for (const msg of chatHistory) {
       if (!msg.content || !msg.content.trim()) continue;
@@ -366,7 +310,6 @@ export const geminiService = {
       }
     }
 
-    // Ensure the chat starts with user role
     while (contents.length > 0 && contents[0].role !== 'user') {
       contents.shift();
     }
@@ -380,13 +323,13 @@ export const geminiService = {
 
     for (const model of candidateModels) {
       try {
-        console.log(`Attempting streamChatResponse with model: ${model}...`);
+        console.log(`Starting streamChatResponse with model: ${model}...`);
         const responseStream = await client.models.generateContentStream({
           model,
           contents,
           config: {
             systemInstruction,
-            temperature: 0.1, // Low temperature for factual accuracy
+            temperature: 0.1,
           }
         });
 
@@ -397,10 +340,11 @@ export const geminiService = {
           onChunk(text);
         }
         
+        verifiedGenerateModel = model;
         onDone(completeText);
-        return; // Successfully completed
+        return;
       } catch (error) {
-        console.error(`Error streaming Gemini response with ${model}:`, error);
+        console.error(`Error streaming Gemini response with ${model}:`, error.message);
         if (model === candidateModels[candidateModels.length - 1]) {
           onError(error);
         }

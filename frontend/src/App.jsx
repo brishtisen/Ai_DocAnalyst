@@ -132,28 +132,31 @@ export default function App() {
      HANDLERS
      ========================================================================== */
 
-  // Chat session creation
-  const handleCreateSession = async () => {
+  // Chat session creation / New Chat
+  const handleNewChat = () => {
+    setActiveSessionId(null);
+    setMessages([]);
+    setInputValue('');
+    setStreamingText('');
+    setStreamingCitations([]);
+    setIsStreaming(false);
+  };
+
+  const createSessionOnServer = async (title) => {
     try {
       const res = await fetch(`${API_URL}/api/conversations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: `Chat ${new Date().toLocaleDateString()}` })
+        body: JSON.stringify({ title: title || `Chat ${new Date().toLocaleDateString()}` })
       });
       if (res.ok) {
         const newSession = await res.json();
         setConversations(prev => [newSession, ...prev]);
         setActiveSessionId(newSession.id);
-        setMessages([]);
-        setInputValue('');
-        setStreamingText('');
-        setStreamingCitations([]);
-        setIsStreaming(false);
         return newSession.id;
       }
     } catch (err) {
-      console.error('Failed to create chat session:', err);
-      alert('Failed to create new chat session.');
+      console.error('Failed to create chat session on server:', err);
     }
     return null;
   };
@@ -266,10 +269,6 @@ export default function App() {
 
     // Refresh documents list
     loadDocuments();
-    // Auto-create chat if none active
-    if (!activeSessionId) {
-      handleCreateSession();
-    }
   };
 
   // Click handler on citation badging
@@ -284,14 +283,30 @@ export default function App() {
     const trimmedText = text?.trim();
     if (!trimmedText || isStreaming) return;
 
-    if (selectedDocIds.length === 0) {
-      alert('Please select at least one document from the sidebar to ask questions.');
+    // Resolve ready target document IDs immediately to eliminate race conditions
+    const readyDocs = documents.filter(d => d.status === 'ready');
+    let targetDocIds = selectedDocIds.filter(id => readyDocs.some(d => d.id === id));
+    
+    // Auto-fallback to the most recent ready doc if user hasn't toggled any checkbox yet
+    if (targetDocIds.length === 0 && readyDocs.length > 0) {
+      targetDocIds = [readyDocs[0].id];
+      setSelectedDocIds(targetDocIds);
+    }
+
+    if (targetDocIds.length === 0) {
+      const hasProcessing = documents.some(d => d.status === 'processing');
+      if (hasProcessing) {
+        alert('Your document is currently being indexed. Please wait a moment...');
+      } else {
+        alert('Please upload a PDF document first.');
+      }
       return;
     }
 
     let currentSessionId = activeSessionId;
     if (!currentSessionId) {
-      currentSessionId = await handleCreateSession();
+      const titlePrompt = trimmedText.length > 30 ? trimmedText.slice(0, 30) + '...' : trimmedText;
+      currentSessionId = await createSessionOnServer(titlePrompt);
       if (!currentSessionId) return;
     }
 
@@ -316,7 +331,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: trimmedText,
-          documentIds: selectedDocIds
+          documentIds: targetDocIds
         })
       });
 
@@ -397,7 +412,7 @@ export default function App() {
         conversations={conversations}
         activeSessionId={activeSessionId}
         onSelectSession={setActiveSessionId}
-        onCreateSession={handleCreateSession}
+        onCreateSession={handleNewChat}
         onDeleteSession={handleDeleteSession}
         documents={documents}
         selectedDocIds={selectedDocIds}

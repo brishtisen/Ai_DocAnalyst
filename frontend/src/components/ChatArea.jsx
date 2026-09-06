@@ -217,8 +217,11 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
   });
 };
 
-  // Render starter cards
-  const activeDocs = documents.filter(d => selectedDocIds.includes(d.id) && d.status === 'ready');
+  // Document state resolution
+  const readyDocs = documents.filter(d => d.status === 'ready');
+  const activeDocs = readyDocs.filter(d => selectedDocIds.includes(d.id));
+  const effectiveDocs = activeDocs.length > 0 ? activeDocs : (readyDocs.length > 0 ? [readyDocs[0]] : []);
+  const hasProcessingDocs = documents.some(d => d.status === 'processing');
 
   const renderEmptyState = () => {
     if (documents.length === 0) {
@@ -235,7 +238,21 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
       );
     }
 
-    if (activeDocs.length === 0) {
+    if (readyDocs.length === 0 && hasProcessingDocs) {
+      return (
+        <div className="chat-empty-state">
+          <div className="welcome-icon-box" style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary)' }}>
+            <Bot size={32} />
+          </div>
+          <h2 className="welcome-title">Processing Document...</h2>
+          <p className="welcome-desc">
+            Extracting text, pages, and indexing search vectors. Action cards will become available as soon as processing finishes.
+          </p>
+        </div>
+      );
+    }
+
+    if (effectiveDocs.length === 0) {
       return (
         <div className="chat-empty-state">
           <div className="welcome-icon-box" style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)' }}>
@@ -256,7 +273,7 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
         </div>
         <h2 className="welcome-title">AI Document Analyst Ready</h2>
         <p className="welcome-desc">
-          Ask questions about the selected files ({activeDocs.length} active). Queries use semantic hybrid retrieval and LLM reranking to fetch page-exact answers.
+          Ask questions about the selected files ({effectiveDocs.length} active: {effectiveDocs.map(d => d.name).join(', ')}). Queries use high-speed hybrid retrieval to fetch page-exact answers.
         </p>
         
         <div className="starter-questions-grid">
@@ -287,9 +304,9 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
       <div className="chat-header">
         <div className="chat-header-info">
           <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Conversation</h2>
-          {activeDocs.length > 0 && (
+          {effectiveDocs.length > 0 && (
             <span className="active-filters-pill">
-              {activeDocs.length} PDF{activeDocs.length > 1 ? 's' : ''} Selected
+              {effectiveDocs.length} PDF{effectiveDocs.length > 1 ? 's' : ''} Active ({effectiveDocs[0].name.slice(0, 20)}...)
             </span>
           )}
         </div>
@@ -382,12 +399,12 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
             onChange={(e) => onChangeInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              activeDocs.length === 0 
-                ? "Select a document in the sidebar to write..." 
-                : "Ask a question about the active documents..."
+              effectiveDocs.length === 0 
+                ? (hasProcessingDocs ? "Processing document, please wait..." : "Select or upload a document to begin...")
+                : "Ask a question about the active document(s)..."
             }
             className="chat-textarea"
-            disabled={activeDocs.length === 0 || isStreaming}
+            disabled={effectiveDocs.length === 0 || isStreaming}
           />
           <div className="chat-input-controls">
             <span className="chat-input-meta">
@@ -396,7 +413,7 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
             <button 
               type="submit" 
               className="send-message-btn"
-              disabled={!inputValue.trim() || activeDocs.length === 0 || isStreaming}
+              disabled={!inputValue.trim() || effectiveDocs.length === 0 || isStreaming}
             >
               <Send size={16} />
             </button>

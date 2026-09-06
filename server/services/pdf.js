@@ -121,12 +121,11 @@ export const pdfService = {
           pages.push({ page: i, text: pageText });
         }
 
-        // Check if PDF is scanned (empty text or extremely low character count per page)
-        const avgChars = localPagesCount > 0 ? totalCharCount / localPagesCount : 0;
-        console.log(`Local parsing complete. Extracted ${localPagesCount} pages. Avg chars/page: ${avgChars.toFixed(1)}`);
+        // Check if PDF is scanned (pure image PDF with no extractable text layer)
+        console.log(`Local parsing complete. Extracted ${localPagesCount} pages, total ${totalCharCount} chars.`);
         
-        if (avgChars < 100) {
-          console.log(`Average characters per page is ${avgChars.toFixed(1)} (< 100). Flagging document as scanned.`);
+        if (totalCharCount < 10) {
+          console.log(`Extracted character count is negligible (${totalCharCount} chars). Flagging document as scanned for Gemini OCR.`);
           isScanned = true;
         }
       }

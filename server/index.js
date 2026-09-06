@@ -58,16 +58,22 @@ const upload = multer({
 
 // Helper: Query Reformulation
 async function reformulateQuery(chatHistory, currentQuestion) {
-  if (!chatHistory || chatHistory.length === 0) return currentQuestion;
+  if (!chatHistory || chatHistory.length < 2) return currentQuestion;
   
-  // Only keep last 4 messages to save tokens and keep it focused
-  const recentHistory = chatHistory.slice(-4);
+  // If the query is already self-contained or an explicit command, do not waste time calling LLM
+  const isActionPrompt = /^(summarize|extract|identify|calculate|generate|what are|explain the|table of contents)/i.test(currentQuestion.trim());
+  if (isActionPrompt || currentQuestion.length > 35) {
+    return currentQuestion;
+  }
+  
+  // Only keep last 2 messages for quick context disambiguation
+  const recentHistory = chatHistory.slice(-2);
   const historyText = recentHistory
     .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n');
 
   const prompt = `
-    Given the following conversation history and a follow-up question, rewrite the question into a standalone, descriptive search query that contains all necessary context from the conversation. The query will be used for document retrieval. Do not answer the question, only output the rewritten search query.
+    Given the following conversation history and a follow-up question, rewrite the question into a standalone search query for document retrieval. Do not answer the question, only output the rewritten search query.
     
     Conversation History:
     ${historyText}
@@ -77,23 +83,22 @@ async function reformulateQuery(chatHistory, currentQuestion) {
     Standalone Search Query:
   `;
 
-  const ai = getGeminiClient();
-  const candidateModels = await getAvailableGenerateModels(ai);
+  try {
+    const ai = getGeminiClient();
+    const candidateModels = await getAvailableGenerateModels(ai);
+    const model = candidateModels[0];
 
-  for (const model of candidateModels) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-      });
-      const rewritten = response.text?.trim();
-      if (rewritten) {
-        console.log(`Reformulated query from: "${currentQuestion}" to: "${rewritten}"`);
-        return rewritten;
-      }
-    } catch (error) {
-      console.warn(`Failed to reformulate query with ${model}:`, error.message);
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
+    const rewritten = response.text?.trim();
+    if (rewritten) {
+      console.log(`Reformulated query from: "${currentQuestion}" to: "${rewritten}"`);
+      return rewritten;
     }
+  } catch (error) {
+    console.warn('Failed to reformulate query:', error.message);
   }
 
   return currentQuestion;
@@ -289,11 +294,17 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
       return;
     }
 
-    // 4. Reformulate query based on conversation history
-    const searchQuery = await reformulateQuery(history, content);
-
-    // 5. Query Hybrid Vector + Keyword Search
-    const contextChunks = await vectorService.search(searchQuery, documentIds, 5);
+    // 4. Determine optimal chunks
+    let contextChunks = [];
+    const isSummaryRequest = /^(summarize|table of contents|create a detailed structured outline)/i.test(content.trim());
+    
+    if (isSummaryRequest) {
+      console.log('Routing to document-wide summary chunks...');
+      contextChunks = vectorService.getSummaryChunks(documentIds, 8);
+    } else {
+      const searchQuery = await reformulateQuery(history, content);
+      contextChunks = await vectorService.search(searchQuery, documentIds, 5);
+    }
 
     if (contextChunks.length === 0) {
       const responseText = "I cannot find any relevant sections in the uploaded documents to answer your question.";
