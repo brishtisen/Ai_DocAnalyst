@@ -11,8 +11,8 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config();
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
-const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004';
 
 let ai = null;
 
@@ -31,12 +31,12 @@ export function getGeminiClient() {
 
 let cachedGenerateModels = null;
 let cachedEmbeddingModels = null;
-let verifiedGenerateModel = null;
-let verifiedEmbeddingModel = null;
+let verifiedGenerateModel = 'gemini-2.5-flash';
+let verifiedEmbeddingModel = 'text-embedding-004';
 
 export async function getAvailableGenerateModels(client) {
   if (verifiedGenerateModel) {
-    return [verifiedGenerateModel];
+    return [verifiedGenerateModel, 'gemini-2.5-flash-lite', 'gemini-3.7-flash', 'gemini-2.5-pro'];
   }
   if (cachedGenerateModels && cachedGenerateModels.length > 0) {
     return cachedGenerateModels;

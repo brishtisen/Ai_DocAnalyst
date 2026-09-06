@@ -18,7 +18,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config();
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,33 +28,19 @@ app.use(cors());
 app.use(express.json());
 
 // Set up upload folder
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+const uploadsDir = path.resolve(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Multer Config
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
+  destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
-    // Avoid filename collisions
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    cb(null, `${uniqueSuffix}-${file.originalname}`);
   }
 });
-const upload = multer({
-  storage,
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF files are supported!'), false);
-    }
-  },
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
-});
+const upload = multer({ storage });
 
 // Helper: Query Reformulation
 async function reformulateQuery(chatHistory, currentQuestion) {
@@ -209,35 +195,33 @@ app.delete('/api/documents/:id', (req, res) => {
   }
 });
 
-// 4. View PDF File (Inline display in iframe)
+// 3b. Serve PDF file stream for inline viewer
 app.get('/api/documents/:id/view', (req, res) => {
   const { id } = req.params;
   try {
     const doc = dbOperations.getDocument(id);
-    if (!doc) {
-      return res.status(404).json({ error: 'Document not found.' });
+    if (!doc || !fs.existsSync(doc.path)) {
+      return res.status(404).json({ error: 'PDF file not found on server.' });
     }
 
-    if (!fs.existsSync(doc.path)) {
-      return res.status(404).json({ error: 'Physical PDF file missing from disk.' });
-    }
-
+    // Set proper inline display headers
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`);
-    fs.createReadStream(doc.path).pipe(res);
+    res.setHeader('Content-Disposition', `inline; filename="${doc.name}"`);
+    const fileStream = fs.createReadStream(doc.path);
+    fileStream.pipe(res);
   } catch (error) {
-    console.error('Failed to serve PDF:', error);
-    res.status(500).json({ error: 'Failed to serve PDF.' });
+    console.error('Failed to view document:', error);
+    res.status(500).json({ error: 'Failed to retrieve document binary stream.' });
   }
 });
 
-// 5. Conversation History Endpoints
+// 4. Conversation Sessions Management
 app.get('/api/conversations', (req, res) => {
   try {
-    const list = dbOperations.getConversations();
-    res.json(list);
+    const conversations = dbOperations.getConversations();
+    res.json(conversations);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch conversations.' });
+    res.status(500).json({ error: 'Failed to retrieve conversations.' });
   }
 });
 
@@ -245,7 +229,8 @@ app.post('/api/conversations', (req, res) => {
   const { title } = req.body;
   try {
     const id = dbOperations.createConversation(title || 'New Chat');
-    res.status(201).json({ id, title: title || 'New Chat' });
+    const conversation = dbOperations.getConversation(id);
+    res.status(201).json(conversation);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create conversation.' });
   }
@@ -255,12 +240,13 @@ app.delete('/api/conversations/:id', (req, res) => {
   const { id } = req.params;
   try {
     dbOperations.deleteConversation(id);
-    res.json({ message: 'Conversation deleted.' });
+    res.json({ message: 'Conversation deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete conversation.' });
   }
 });
 
+// 5. Get Messages for a specific session
 app.get('/api/conversations/:id/messages', (req, res) => {
   const { id } = req.params;
   try {
@@ -280,10 +266,14 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
     return res.status(400).json({ error: 'Message content is required.' });
   }
 
-  // Set up Server Sent Events headers for streaming
+  // Set up Server Sent Events headers for unbuffered real-time streaming
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders();
+  }
 
   try {
     // 1. Get history for conversation
@@ -328,6 +318,7 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
     }));
 
     res.write(`data: ${JSON.stringify({ citations })}\n\n`);
+    if (typeof res.flush === 'function') res.flush();
 
     // 6. Construct prompt and stream response
     // Append user's new message to the chatHistory sent to the model
@@ -339,11 +330,13 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
       (textChunk) => {
         // Stream text chunk
         res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
+        if (typeof res.flush === 'function') res.flush();
       },
       (completeText) => {
         // On completion, save model message in DB
         dbOperations.insertMessage(conversationId, 'model', completeText, citations);
         res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+        if (typeof res.flush === 'function') res.flush();
         res.end();
       },
       (error) => {
