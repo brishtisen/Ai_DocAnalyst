@@ -15,6 +15,8 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004';
 
 let ai = null;
+let verifiedGenerateModel = null;
+let verifiedEmbeddingModel = null;
 
 // Initialize Gemini Client
 export function getGeminiClient() {
@@ -31,23 +33,16 @@ export function getGeminiClient() {
 
 let cachedGenerateModels = null;
 let cachedEmbeddingModels = null;
-let verifiedGenerateModel = 'gemini-2.5-flash';
-let verifiedEmbeddingModel = 'text-embedding-004';
 
 export async function getAvailableGenerateModels(client) {
   if (verifiedGenerateModel) {
-    return [verifiedGenerateModel, 'gemini-2.5-flash-lite', 'gemini-3.7-flash', 'gemini-2.5-pro'];
+    const list = cachedGenerateModels || [verifiedGenerateModel, 'gemini-2.5-flash', 'gemini-3.7-flash', 'gemini-3.1-pro-preview'];
+    return [verifiedGenerateModel, ...list.filter(m => m !== verifiedGenerateModel)];
   }
+
   if (cachedGenerateModels && cachedGenerateModels.length > 0) {
     return cachedGenerateModels;
   }
-
-  const defaults = [
-    process.env.GEMINI_MODEL,
-    'gemini-2.5-flash',
-    'gemini-3.7-flash',
-    'gemini-2.5-pro'
-  ].filter(Boolean);
 
   try {
     const list = await client.models.list();
@@ -55,19 +50,23 @@ export async function getAvailableGenerateModels(client) {
     for await (const m of list) {
       if (m.name) {
         const id = m.name.replace(/^models\//, '');
-        if (!id.includes('embedding')) {
+        if (!id.includes('embedding') && !id.includes('2.5-pro') && !id.includes('1.5') && !id.includes('2.0')) {
           discovered.push(id);
         }
       }
     }
+    console.log('Live discovered models for API key:', discovered);
     if (discovered.length > 0) {
+      // Prioritize fast flash models for sub-second latency
       discovered.sort((a, b) => {
-        if (a.includes('2.5-flash')) return -1;
-        if (b.includes('2.5-flash')) return 1;
-        if (a.includes('3.7-flash')) return -1;
-        if (b.includes('3.7-flash')) return 1;
-        if (a.includes('flash') && !b.includes('flash')) return -1;
-        if (!a.includes('flash') && b.includes('flash')) return 1;
+        if (a === 'gemini-2.5-flash') return -1;
+        if (b === 'gemini-2.5-flash') return 1;
+        if (a === 'gemini-3.7-flash') return -1;
+        if (b === 'gemini-3.7-flash') return 1;
+        if (a.includes('flash')) return -1;
+        if (b.includes('flash')) return 1;
+        if (a.includes('3.1-pro-preview')) return -1;
+        if (b.includes('3.1-pro-preview')) return 1;
         return 0;
       });
       cachedGenerateModels = discovered;
@@ -77,24 +76,26 @@ export async function getAvailableGenerateModels(client) {
     console.warn('Failed to query models list from API:', err.message);
   }
 
+  const defaults = [
+    process.env.GEMINI_MODEL,
+    'gemini-2.5-flash',
+    'gemini-3.7-flash',
+    'gemini-3.1-pro-preview'
+  ].filter(Boolean);
+
   cachedGenerateModels = defaults;
   return defaults;
 }
 
 export async function getAvailableEmbeddingModels(client) {
   if (verifiedEmbeddingModel) {
-    return [verifiedEmbeddingModel];
+    const list = cachedEmbeddingModels || [verifiedEmbeddingModel, 'text-embedding-004', 'gemini-embedding-001'];
+    return [verifiedEmbeddingModel, ...list.filter(m => m !== verifiedEmbeddingModel)];
   }
+
   if (cachedEmbeddingModels && cachedEmbeddingModels.length > 0) {
     return cachedEmbeddingModels;
   }
-
-  const defaults = [
-    process.env.GEMINI_EMBEDDING_MODEL,
-    'gemini-embedding-001',
-    'text-embedding-004',
-    'embedding-001'
-  ].filter(Boolean);
 
   try {
     const list = await client.models.list();
@@ -114,6 +115,13 @@ export async function getAvailableEmbeddingModels(client) {
   } catch (err) {
     console.warn('Failed to query embedding models list from API:', err.message);
   }
+
+  const defaults = [
+    process.env.GEMINI_EMBEDDING_MODEL,
+    'text-embedding-004',
+    'gemini-embedding-001',
+    'embedding-001'
+  ].filter(Boolean);
 
   cachedEmbeddingModels = defaults;
   return defaults;
