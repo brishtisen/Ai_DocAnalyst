@@ -133,13 +133,31 @@ export default function App() {
      ========================================================================== */
 
   // Chat session creation / New Chat
-  const handleNewChat = () => {
-    setActiveSessionId(null);
-    setMessages([]);
+  const handleNewChat = async () => {
     setInputValue('');
     setStreamingText('');
     setStreamingCitations([]);
     setIsStreaming(false);
+    setMessages([]);
+
+    try {
+      const title = `Chat ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      const res = await fetch(`${API_URL}/api/conversations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      if (res.ok) {
+        const newSession = await res.json();
+        setConversations(prev => [newSession, ...prev.filter(s => s.id !== newSession.id)]);
+        setActiveSessionId(newSession.id);
+        return newSession.id;
+      }
+    } catch (err) {
+      console.error('Failed to create chat session on server:', err);
+    }
+    setActiveSessionId(null);
+    return null;
   };
 
   const createSessionOnServer = async (title) => {
@@ -164,16 +182,15 @@ export default function App() {
   // Chat session deletion
   const handleDeleteSession = async (id) => {
     try {
-      const res = await fetch(`${API_URL}/api/conversations/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setConversations(prev => prev.filter(s => s.id !== id));
-        if (activeSessionId === id) {
-          setActiveSessionId(null);
-          setMessages([]);
-        }
+      setConversations(prev => prev.filter(s => s.id !== id));
+      if (activeSessionId === id) {
+        setActiveSessionId(null);
+        setMessages([]);
       }
+      await fetch(`${API_URL}/api/conversations/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.error('Failed to delete chat session:', err);
+      loadConversations();
     }
   };
 
@@ -188,17 +205,21 @@ export default function App() {
   const handleDeleteDoc = async (id) => {
     if (!window.confirm('Are you sure you want to delete this document? All associated vectors will be erased.')) return;
     try {
+      setDocuments(prev => prev.filter(d => d.id !== id));
+      setSelectedDocIds(prev => prev.filter(item => item !== id));
+      if (viewingDoc && viewingDoc.id === id) {
+        setViewingDoc(null);
+        setIsViewerCollapsed(true);
+      }
+
       const res = await fetch(`${API_URL}/api/documents/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setDocuments(prev => prev.filter(d => d.id !== id));
-        setSelectedDocIds(prev => prev.filter(item => item !== id));
-        if (viewingDoc && viewingDoc.id === id) {
-          setViewingDoc(null);
-          setIsViewerCollapsed(true);
-        }
+      if (!res.ok) {
+        console.warn('Delete document server returned status:', res.status);
+        loadDocuments();
       }
     } catch (err) {
       console.error('Failed to delete document:', err);
+      loadDocuments();
     }
   };
 

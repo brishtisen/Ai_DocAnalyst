@@ -149,20 +149,26 @@ app.post('/api/documents', upload.single('pdf'), async (req, res) => {
           throw new Error('No text or content could be extracted from the PDF.');
         }
 
-        // C. Generate embeddings in batch
-        console.log(`Generating embeddings for ${chunks.length} chunks of document: "${originalname}"...`);
-        const chunkTexts = chunks.map(c => c.content);
-        const embeddings = await geminiService.getEmbeddings(chunkTexts);
-
-        // D. Save chunks & embeddings to database
+        // Save chunks to database first
         dbOperations.insertChunks(chunks);
-        
-        const embeddingRecords = chunks.map((chunk, index) => ({
-          chunk_id: chunk.id,
-          document_id: documentId,
-          embedding: embeddings[index]
-        }));
-        dbOperations.insertEmbeddings(embeddingRecords);
+
+        // C. Generate embeddings (with graceful fallback if remote API errors)
+        try {
+          console.log(`Generating embeddings for ${chunks.length} chunks of document: "${originalname}"...`);
+          const chunkTexts = chunks.map(c => c.content);
+          const embeddings = await geminiService.getEmbeddings(chunkTexts);
+
+          if (embeddings && embeddings.length === chunks.length) {
+            const embeddingRecords = chunks.map((chunk, index) => ({
+              chunk_id: chunk.id,
+              document_id: documentId,
+              embedding: embeddings[index]
+            }));
+            dbOperations.insertEmbeddings(embeddingRecords);
+          }
+        } catch (embErr) {
+          console.warn('Embeddings generation encountered an error, falling back to BM25 index:', embErr.message);
+        }
 
         // E. Update status to 'ready'
         dbOperations.updateDocumentStatus(documentId, 'ready', parseResult.pagesCount);
@@ -185,22 +191,21 @@ app.delete('/api/documents/:id', (req, res) => {
   const { id } = req.params;
   try {
     const doc = dbOperations.getDocument(id);
-    if (!doc) {
-      return res.status(404).json({ error: 'Document not found.' });
+    if (doc && doc.path && fs.existsSync(doc.path)) {
+      try {
+        fs.unlinkSync(doc.path);
+      } catch (e) {
+        console.warn('Could not remove physical file:', e.message);
+      }
     }
 
     // Delete record from Database (cascades chunk & embedding deletion)
     dbOperations.deleteDocument(id);
 
-    // Delete physical file from disk
-    if (fs.existsSync(doc.path)) {
-      fs.unlinkSync(doc.path);
-    }
-
-    res.json({ message: 'Document successfully deleted.' });
+    res.json({ message: 'Document successfully deleted.', id });
   } catch (error) {
     console.error('Failed to delete document:', error);
-    res.status(500).json({ error: 'Failed to delete document.' });
+    res.status(500).json({ error: 'Failed to delete document: ' + error.message });
   }
 });
 

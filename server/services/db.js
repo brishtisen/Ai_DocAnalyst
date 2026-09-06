@@ -96,9 +96,20 @@ export const dbOperations = {
   },
 
   deleteDocument: (id) => {
-    // Foreign keys will cascade delete chunks and embeddings
-    const stmt = db.prepare(`DELETE FROM documents WHERE id = ?`);
-    stmt.run(id);
+    try {
+      const stmt1 = db.prepare(`DELETE FROM embeddings WHERE document_id = ?`);
+      stmt1.run(id);
+    } catch (e) {
+      console.warn('Error deleting embeddings for doc:', e.message);
+    }
+    try {
+      const stmt2 = db.prepare(`DELETE FROM chunks WHERE document_id = ?`);
+      stmt2.run(id);
+    } catch (e) {
+      console.warn('Error deleting chunks for doc:', e.message);
+    }
+    const stmt3 = db.prepare(`DELETE FROM documents WHERE id = ?`);
+    stmt3.run(id);
   },
 
   // Chunk Operations
