@@ -29,6 +29,8 @@ export function getGeminiClient() {
   return ai;
 }
 
+let cachedGenerateModels = null;
+let cachedEmbeddingModels = null;
 let verifiedGenerateModel = null;
 let verifiedEmbeddingModel = null;
 
