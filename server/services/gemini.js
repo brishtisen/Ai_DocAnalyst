@@ -11,7 +11,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config();
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
 const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
 
 let ai = null;
@@ -39,9 +39,9 @@ export async function getAvailableGenerateModels(client) {
 
   const defaults = [
     process.env.GEMINI_MODEL,
+    'gemini-3.7-flash',
+    'gemini-3.7-pro',
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
     'gemini-2.5-pro'
   ].filter(Boolean);
 
@@ -58,8 +58,12 @@ export async function getAvailableGenerateModels(client) {
     }
     console.log('Live available generate models for API key:', discovered);
     if (discovered.length > 0) {
-      // Prioritize flash models
+      // Prioritize 3.7 and flash models
       discovered.sort((a, b) => {
+        if (a.includes('3.7-flash')) return -1;
+        if (b.includes('3.7-flash')) return 1;
+        if (a.includes('3.7')) return -1;
+        if (b.includes('3.7')) return 1;
         if (a.includes('2.5-flash')) return -1;
         if (b.includes('2.5-flash')) return 1;
         if (a.includes('flash') && !b.includes('flash')) return -1;

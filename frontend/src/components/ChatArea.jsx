@@ -264,15 +264,15 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
             <strong>Summarize Document</strong>
             <p style={{ color: 'var(--color-text-secondary)', marginTop: '4px', fontSize: '0.8rem' }}>Get a rapid breakdown of themes, scope, and conclusions.</p>
           </div>
-          <div className="starter-card" onClick={() => onSendMessage("What are the main statistics, metrics, or table calculations reported?")}>
+          <div className="starter-card" onClick={() => onSendMessage("Extract and calculate all key metrics, statistics, and table data from this document.")}>
             <strong>Extract Key Metrics</strong>
             <p style={{ color: 'var(--color-text-secondary)', marginTop: '4px', fontSize: '0.8rem' }}>Perform numerical discovery and isolate table balances.</p>
           </div>
-          <div className="starter-card" onClick={() => onSendMessage("What are the major limitations, risks, or conflicts raised?")}>
+          <div className="starter-card" onClick={() => onSendMessage("Identify the major limitations, risks, warnings, and critical issues mentioned in this document.")}>
             <strong>Identify Risks</strong>
             <p style={{ color: 'var(--color-text-secondary)', marginTop: '4px', fontSize: '0.8rem' }}>Search for clauses, exceptions, risk items, and disclosures.</p>
           </div>
-          <div className="starter-card" onClick={() => onSendMessage("Create a detailed structured index of the contents of the files.")}>
+          <div className="starter-card" onClick={() => onSendMessage("Generate a detailed, structured outline and table of contents for this document.")}>
             <strong>Table of Contents</strong>
             <p style={{ color: 'var(--color-text-secondary)', marginTop: '4px', fontSize: '0.8rem' }}>Map the document structures page-by-page.</p>
           </div>
@@ -382,14 +382,12 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
             onChange={(e) => onChangeInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              !activeSessionId 
-                ? "Start a new conversation..." 
-                : activeDocs.length === 0 
-                  ? "Select a document in the sidebar to write..." 
-                  : "Ask a question about the active documents..."
+              activeDocs.length === 0 
+                ? "Select a document in the sidebar to write..." 
+                : "Ask a question about the active documents..."
             }
             className="chat-textarea"
-            disabled={!activeSessionId || activeDocs.length === 0 || isStreaming}
+            disabled={activeDocs.length === 0 || isStreaming}
           />
           <div className="chat-input-controls">
             <span className="chat-input-meta">
@@ -398,7 +396,7 @@ const renderParsedMarkdown = (text, citationsList = [], isMessageStreaming = fal
             <button 
               type="submit" 
               className="send-message-btn"
-              disabled={!inputValue.trim() || !activeSessionId || activeDocs.length === 0 || isStreaming}
+              disabled={!inputValue.trim() || activeDocs.length === 0 || isStreaming}
             >
               <Send size={16} />
             </button>

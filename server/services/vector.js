@@ -108,15 +108,38 @@ export const vectorService = {
     console.log(`Starting Hybrid Search for query: "${query}" on documents: [${documentIds.join(', ')}]`);
 
     // 1. Fetch embeddings and chunks from DB
-    const dbEmbeddings = dbOperations.getEmbeddingsForDocuments(documentIds);
-    if (dbEmbeddings.length === 0) {
-      console.log('No embeddings found for the selected documents.');
-      return [];
+    let dbEmbeddings = [];
+    try {
+      dbEmbeddings = dbOperations.getEmbeddingsForDocuments(documentIds);
+    } catch (e) {
+      console.warn('Could not load embeddings:', e.message);
     }
 
     // 2. Generate embedding for query
-    const queryEmbeddings = await geminiService.getEmbeddings([query]);
-    const queryVec = queryEmbeddings[0];
+    let queryVec = null;
+    if (dbEmbeddings.length > 0) {
+      try {
+        const queryEmbeddings = await geminiService.getEmbeddings([query]);
+        if (queryEmbeddings && queryEmbeddings.length > 0) {
+          queryVec = queryEmbeddings[0];
+        }
+      } catch (embErr) {
+        console.warn('Failed to embed query, falling back to BM25 search:', embErr.message);
+      }
+    }
+
+    // Fallback if vector search cannot run
+    if (!queryVec || dbEmbeddings.length === 0) {
+      console.log('Using BM25 Sparse Search fallback...');
+      const allChunks = dbOperations.getChunksForDocuments(documentIds);
+      if (allChunks.length === 0) {
+        console.log('No chunks found in DB for selected documents.');
+        return [];
+      }
+      const keywordScores = runBM25Search(query, allChunks);
+      const topKeywordChunks = keywordScores.map(r => r.chunk).slice(0, finalTopK);
+      return topKeywordChunks;
+    }
 
     // 3. Dense/Semantic Search (Cosine Similarity)
     const semanticScores = dbEmbeddings.map(record => {

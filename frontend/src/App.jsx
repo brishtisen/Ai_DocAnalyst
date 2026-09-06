@@ -67,15 +67,11 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setConversations(data);
-        // If there's conversations and none active, select the first one
-        if (data.length > 0 && !activeSessionId) {
-          setActiveSessionId(data[0].id);
-        }
       }
     } catch (err) {
       console.error('Failed to load conversations:', err);
     }
-  }, [activeSessionId]);
+  }, []);
 
   const loadMessages = useCallback(async (sessionId) => {
     if (!sessionId) return;
@@ -117,15 +113,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [documents, loadDocuments]);
 
-  // Select all uploaded docs by default as they finish processing
+  // Select only the most recently uploaded ready document by default
   useEffect(() => {
-    const readyDocIds = documents.filter(d => d.status === 'ready').map(d => d.id);
+    const readyDocs = documents.filter(d => d.status === 'ready');
+    const readyDocIds = readyDocs.map(d => d.id);
     setSelectedDocIds(prev => {
       // Keep only selection choices that are still in documents list
       const filtered = prev.filter(id => readyDocIds.includes(id));
-      // If we had none selected and now have ready ones, auto-select them
-      if (filtered.length === 0 && readyDocIds.length > 0 && prev.length === 0) {
-        return readyDocIds;
+      // If we had none selected and now have ready ones, auto-select ONLY the latest document (index 0)
+      if (filtered.length === 0 && readyDocs.length > 0 && prev.length === 0) {
+        return [readyDocs[0].id];
       }
       return filtered;
     });
@@ -147,10 +144,18 @@ export default function App() {
         const newSession = await res.json();
         setConversations(prev => [newSession, ...prev]);
         setActiveSessionId(newSession.id);
+        setMessages([]);
+        setInputValue('');
+        setStreamingText('');
+        setStreamingCitations([]);
+        setIsStreaming(false);
+        return newSession.id;
       }
     } catch (err) {
       console.error('Failed to create chat session:', err);
+      alert('Failed to create new chat session.');
     }
+    return null;
   };
 
   // Chat session deletion
@@ -161,6 +166,7 @@ export default function App() {
         setConversations(prev => prev.filter(s => s.id !== id));
         if (activeSessionId === id) {
           setActiveSessionId(null);
+          setMessages([]);
         }
       }
     } catch (err) {
@@ -182,6 +188,7 @@ export default function App() {
       const res = await fetch(`${API_URL}/api/documents/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setDocuments(prev => prev.filter(d => d.id !== id));
+        setSelectedDocIds(prev => prev.filter(item => item !== id));
         if (viewingDoc && viewingDoc.id === id) {
           setViewingDoc(null);
           setIsViewerCollapsed(true);
@@ -196,6 +203,7 @@ export default function App() {
   const handleUploadFiles = async (files) => {
     setIsUploading(true);
     setUploadProgress(0);
+    const uploadedIds = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -221,6 +229,12 @@ export default function App() {
 
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const resData = JSON.parse(xhr.responseText || '{}');
+              if (resData.documentId) {
+                uploadedIds.push(resData.documentId);
+              }
+            } catch {}
             resolve();
           } else {
             let errResponse = {};
@@ -244,6 +258,12 @@ export default function App() {
 
     setIsUploading(false);
     setUploadProgress(0);
+
+    // If new files were uploaded, auto-select ONLY the newly uploaded files
+    if (uploadedIds.length > 0) {
+      setSelectedDocIds(uploadedIds);
+    }
+
     // Refresh documents list
     loadDocuments();
     // Auto-create chat if none active
@@ -261,14 +281,26 @@ export default function App() {
 
   // Sending chat query messages & handling the Server-Sent Events (SSE) stream
   const handleSendMessage = async (text) => {
-    if (!activeSessionId) return;
+    const trimmedText = text?.trim();
+    if (!trimmedText || isStreaming) return;
+
+    if (selectedDocIds.length === 0) {
+      alert('Please select at least one document from the sidebar to ask questions.');
+      return;
+    }
+
+    let currentSessionId = activeSessionId;
+    if (!currentSessionId) {
+      currentSessionId = await handleCreateSession();
+      if (!currentSessionId) return;
+    }
 
     // Add user message locally first
     const userMsgId = Date.now().toString();
     const newUserMessage = {
       id: userMsgId,
       role: 'user',
-      content: text,
+      content: trimmedText,
       created_at: new Date().toISOString()
     };
     
@@ -279,17 +311,24 @@ export default function App() {
     setStreamingCitations([]);
 
     try {
-      const response = await fetch(`${API_URL}/api/conversations/${activeSessionId}/messages`, {
+      const response = await fetch(`${API_URL}/api/conversations/${currentSessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: text,
+          content: trimmedText,
           documentIds: selectedDocIds
         })
       });
 
       if (!response.ok) {
-        throw new Error('Server returned an error.');
+        let errMsg = 'Server error occurred.';
+        try {
+          const errData = await response.json();
+          errMsg = errData.error || response.statusText;
+        } catch {
+          errMsg = response.statusText || 'Failed to communicate with server.';
+        }
+        throw new Error(errMsg);
       }
 
       // Stream Reader setup
@@ -331,7 +370,7 @@ export default function App() {
 
               if (data.done) {
                 // Done! Refresh messages list to sync with DB
-                loadMessages(activeSessionId);
+                loadMessages(currentSessionId);
                 setIsStreaming(false);
                 setStreamingText('');
                 setStreamingCitations([]);
@@ -344,8 +383,10 @@ export default function App() {
       }
     } catch (err) {
       console.error('Query message transaction failed:', err);
-      alert(`Chat transaction failed: ${err.message}`);
+      alert(`Chat query error: ${err.message}`);
       setIsStreaming(false);
+      setStreamingText('');
+      setStreamingCitations([]);
     }
   };
 
